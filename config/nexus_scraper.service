@@ -1,0 +1,38 @@
+[Unit]
+Description=Scraper Nexus T-Systems (Playwright, Python)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+CPUAffinity=0-1
+# Reemplaza por el usuario de sistema que quieras usar (recomendado crear uno dedicado sin login)
+User=administrador
+Group=administrador
+
+# Carpeta del proyecto; aquí se crearán auth_state.json, CSV, etc.
+WorkingDirectory=/opt/nexus_crawler
+
+# Carga USER y PASS
+Environment="USER=ramon.cruz@benalmadena.es"
+Environment="PASS=Bnmd15.125rc"
+
+# Si usas pyenv, puedes exportar PATH para encontrar los shims (opcional):
+Environment=PYENV_ROOT=/home/administrador/.pyenv
+Environment=PATH=/home/administrador/.pyenv/bin:/home/administrador/.pyenv/shims:/usr/local/bin:/usr/bin
+
+# Usa el intérprete de TU entorno (ajusta la ruta):
+ExecStart=/home/administrador/.pyenv/versions/nexus_crawler/bin/python -u /opt/nexus_crawler/daily_crawler.py
+
+# Robustez
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+KillSignal=SIGINT
+
+# (Opcional) endurecimiento mínimo:
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Progreso{% endblock %}
+{% block content %}
+<h1>Progreso del Scraping</h1>
+<p id="msg">Conectando…</p>
+<div class="progress">
+  <div id="bar" class="bar" style="width:0%"></div>
+</div>
+<div class="buttons">
+  <button id="cancel" class="btn secondary" type="button">Cancelar</button>
+  <a id="dl" class="btn" href="{{ url_for('download_csv') }}" style="display:none">Descargar CSV</a>
+  <a id="back" class="btn secondary" href="{{ url_for('index') }}" style="display:none">Volver</a>
+</div>
+<script>
+  const evt = new EventSource("{{ url_for('sse_events', job_id=job_id) }}");
+  const msg = document.getElementById("msg");
+  const bar = document.getElementById("bar");
+  const dl = document.getElementById("dl");
+  const back = document.getElementById("back");
+  const cancelBtn = document.getElementById("cancel");
+  const cancelUrl = "{{ url_for('cancel_run', job_id=job_id) }}";
+
+  async function requestCancel() {
+    if (!cancelBtn) return;
+    cancelBtn.disabled = true;
+    cancelBtn.textContent = "Cancelando…";
+    try {
+      const response = await fetch(cancelUrl, { method: "POST" });
+      if (!response.ok) {
+        throw new Error("Cancel request failed");
+      }
+    } catch (err) {
+      console.error(err);
+      cancelBtn.disabled = false;
+      cancelBtn.textContent = "Reintentar cancelar";
+    }
+  }
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", requestCancel);
+  }
+
+  evt.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      bar.style.width = (data.progress || 0) + "%";
+      msg.textContent = data.message || data.status || "";
+      if (cancelBtn) {
+        if (data.status === "cancelling") {
+          cancelBtn.disabled = true;
+          cancelBtn.textContent = "Cancelando…";
+        }
+        if (["done", "error", "cancelled"].includes(data.status)) {
+          cancelBtn.style.display = "none";
+        }
+      }
+      if (data.status === "done") {
+        dl.style.display = "";
+        if (back) {
+          back.style.display = "";
+        }
+        evt.close();
+      }
+      if (data.status === "error") {
+        msg.textContent = "Error: " + (data.message || "desconocido");
+        evt.close();
+      }
+      if (data.status === "cancelled") {
+        msg.textContent = data.message || "Tarea cancelada.";
+        if (back) {
+          back.style.display = "";
+        }
+        evt.close();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+  evt.onerror = () => {
+    msg.textContent = "Conexión perdida con el servidor.";
+  };
+</script>
+{% endblock %}

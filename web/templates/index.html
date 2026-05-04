@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Lanzar Scrapeo{% endblock %}
+{% block content %}
+<h1>Realizar Scraping de Incidencias</h1>
+<form method="post" action="{{ url_for('post_run') }}">
+  <label for="date">Fecha del Período. De las incidencias creadas a partir de ella, se cogen solo las que siguen abiertas a día de hoy y las que se cerraron a partir de la fecha de inicio.</label>
+  <input id="date" name="period_date" type="date" required />
+  <label for="date">Fecha de Inicio. Se cogen todas las incidencias creadas a partir de ella, independientemente de su estado.</label>
+  <input id="date" name="last_date" type="date" required />
+  <div class="buttons">
+    <button type="submit">Lanzar Scraping</button>
+    {% if csv_exists %}
+      <a class="btn secondary" href="{{ url_for('download_csv') }}">Descargar CSV</a>
+    {% else %}
+      <button class="btn secondary" type="button" disabled title="Aún no hay CSV">Descargar CSV</button>
+    {% endif %}
+  </div>
+</form>
+{% endblock %}

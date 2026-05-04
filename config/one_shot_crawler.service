@@ -1,0 +1,20 @@
+sudo tee /etc/systemd/system/one_shot_crawler.service >/dev/null <<'EOF'
+[Unit]
+Description=One-Shot Crawler FastAPI (Uvicorn only)
+After=network.target
+
+[Service]
+User=administrador
+Group=administrador
+WorkingDirectory=/opt/nexus_crawler
+Environment="PYTHONUNBUFFERED=1"
+Environment=PYENV_ROOT=/home/administrador/.pyenv
+Environment=PATH=/home/administrador/.pyenv/bin:/home/administrador/.pyenv/shims:/usr/local/bin:/usr/bin
+ExecStart=/home/administrador/.pyenv/versions/nexus_crawler/bin/uvicorn app:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOF
