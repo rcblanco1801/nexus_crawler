@@ -49,6 +49,37 @@ A continuación se presenta la estructura del directorio /opt/nexus_crawler desd
 - **/one_shot_crawler.py** Ídem para el proceso puntual.
 - **/utilities.py** Fichero que contiene determinadas constantes necesarias.
 
+Para lanzar la aplicación, deberemos seguir los siguientes pasos:
+1. Replicar el entorno virtual con ``pyenv``. Para ello, deberemos tener ``pyenv`` junto con ``pyenv-virtualenv`` en nuestro sistema debian, ejecutando lo siguiente:
+    - Instalar dependencias de pyenv y pyenv-virtualenv: ``sudo apt install -y make build-essential libssl-dev zlib1g-dev
+libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev
+libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev git``
+    - Instalamos propiamente ambas herramientas: ``curl https://pyenv.run | bash``
+    - Agregar algunas líneas a la configuración de bash: 
+    ``echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc``
+``echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc``
+``echo 'eval "$(pyenv init -)"' >> ~/.bashrc``
+``echo 'eval "$(pyenv virtualenv-init -)"' >> ~/.bashrc``
+    - Recargar la configuración: ``source ~/.bashrc``
+2. Crear el propio entorno a partir del fichero ``requirements.txt``. Para ello, seguimos los siguientes pasos:
+    - Creamos el entorno vacío de python 3.12: ``pyenv virtualenv 3.12 nexus_crawler``
+    - Activamos el entorno: ``pyenv activate nexus_crawler``
+    - Instalamos pip, que es la herramienta de manejo de librerías para python: ``sudo apt install pip``
+    - Comprobamos que pip esté actualizado: ``pip install --upgrade pip``
+    - Instalamos librerías con pip: ``pip install -r requirements.txt``
+
+A continuación, deberemos tener disponible este repositorio de código en la máquina debian donde deseemos ejecutar la aplicación. Los ficheros de configuración están preparados para las rutas específicas que se han mencionado antes, de manera que, si no los modificamos, el código deberá estar en ``/opt/nexus_crawler``, y toda la carpeta deberá pertener al usuario administrador, lo cual podemos hacer con ``sudo chown -R administrador:administrador /opt/nexus_crawler``. De la misma forma, los ficheros de configuración también están preparados para hacerlo todo con el usuario administrador, de manera que deberemos tener pyenv en su home, no en el root.
+    
+Una vez tenemos el entorno y el código establecidos, tenemos que configurar los servicios de systemd pertinentes:
+1. Comenzamos con el servicio diario: 
+	- Primero, copiamos el fichero de configuración ``nexus_scraper.service`` a ``/etc/systemd/system``
+	- A continuación, establecemos los permisos adecuados: ``sudo chmod 644 /etc/systemd/system/nexus_scraper.service``
+	- Recargamos el demonio de systemctl para que se dé cuenta del nuevo fichero: ``sudo sytemctl daemon-reload``
+	- Lo habilitamos para que el servicio arranque siempre que la máquina también lo haga (con la opción --now para que también se inicie sin necesidad de reiniciar el servidor): ``sudo systemctl enable --now nexus_scraper.service``. Para para el servicio, ``sudo systemctl stop nexus_scraper.service``, para reiniciarlo, ``sudo systemctl restart nexus_scraper.service``
+	- Comprobamos su estado con ``sudo systemctl status nexus_scraper.service``. Otra herramienta relevante es ``journalctl`` para leer los logs y ver si se producen errores; con la orden ``sudo journalctl -fu nexus_scraper.service`` podemos ver los logs en tiempo real, y con ``sudo journalctl -u nexus_scraper.service -n 100`` podemos ver las últimas 100 (o las que queramos) líneas de logs.
+	- Si leemos el fichero de configuración del servicio, podremos ver que lo único que hace es lanzar el script de python ``daily_crawler.py``. Este script establece un blucle infinito, por lo que se preparó también un ``cron`` para que el proceso esté activo solo de día. Lo que se hizo fue un ``sudo crontab -e`` y añadir las últimas líneas no comentadas del fichero ``cron.txt`` de este repositorio.
+2. El proceso puntual es, en realidad, muy similar de configurar, lo único que hay que tener en cuenta es que, en lugar de un script de python, lo que lanza es un servidor ``uvicorn`` desde el propio entorno de python y a través del puerto 8000, por lo que hay que asegurarse de que el puerto está expuesto, y todo esto sin cron ninguno ya que lo que hace es servir una interfaz web.
+
 ### Diagrama de clases
 
 ```mermaid
@@ -465,7 +496,7 @@ Como podemos observar, hay dos tipos de elementos en el bloque de actividad: com
 flowchart TB
     A[Start] --> B[Inicializamos la estructura de datos donde almacenaremos\n las fechas de respuesta, resolución y las pausas]
     B --> C{Historial vacío?}
-    C -->|No| D[Empezamos a iterar sobre el historial desde el primer\n elemento <li>]
+    C -->|No| D["Empezamos a iterar sobre el historial desde el primer\n elemento <li>"]
     C --> G[Devuelve resultados]
     G --> H[End]
     D --> E{li tiene fecha?}
@@ -480,7 +511,7 @@ flowchart TB
     I -->|Sí| J[Guardamos fecha de primera respuesta]
     I -->|No| K{Es comienzo \nde pausa?}
     J --> K
-    K -->|Sí| L[Comenzamos a iterar sobre los siguientes <li> a li]
+    K -->|Sí| L["Comenzamos a iterar sobre los siguientes <li> a li"]
     K -->|No: li++| D
     L --> M{li es esperando \na cliente y next_li\n no es comentario\n de trabajador?}
     M -->|Sí| N[La fecha de next_li es el fin de la pausa, la guardamos]
@@ -496,7 +527,7 @@ flowchart TB
     D -->|for li terminado| U{La incidencia \nestá cerrada?}
     U -->|No| V[Guardamos las pausas en los resultados]
     U -->|Sí| Z{Hay una cláusula\n de cierre que\n no sea puramente\n de resolución?}
-    Z --> |Sí| A1[Guardamos su fecha\n como fecha de resolución]
+    Z -->|Sí| A1[Guardamos su fecha\n como fecha de resolución]
     A1 --> B1{Hay una cláusula\n pura de\n resolución?}
     B1 -->|No| V
     Z -->|No| B1
@@ -952,6 +983,8 @@ Confiamos en que la anterior computación se entienda adecuadamente sin muchos p
 
 ![Vista del progreso de la ejecución.](./docs/progreso.png)
 
+![Siguiente vista del progreso de la ejecución.](./docs/progreso2.png)
+
 Es interesante también comentar que, una vez lanzada la tarea, la página que se nos muestra, ```run.html```, tiene una cierta cantidad de código javascript no trivial ya que necesita mostrar a tiempo real el progreso de la tarea. A lo largo de este documento se ha obviado (y no se explorará con mucho detalle, en aras de facilitar la compresión de los otros componentes más relevantes) determinados bloques de código a lo largo de la ejecución del scraping en el backend que proporcionan actualizaciones en streaming del estado de dicho scraping para que se puedan mostrar en esta vista de la interfaz web. El endpoint de la API que permite toda esta comunicación es ```"/events/{job_id}"```, asociado a la función ```sse_events```. Dicho endpoint lanza un hilo paralelo (al estilo de ```schedule()```) que está constantemente ofreciendo un payload en formato json con la información correspondiente al estado de la tarea. Dicho json es un diccionario con claves ```{"status", "progress", "message"}```, que vendría a ser el estado mencionado en el pseudocódigo de la función ```schedule()```, de manera que, a través de un ```yield``` se proporciona al javascript de ```run.html``` para que la barra de progreso se actualice y para mostrar el mensaje proporcionado en el payload, que puede ser meramente de información del estado actual de la tarea o un mensaje de error.
 
 Como se puede comprobar, la interfaz proporciona un botón de cancelar el proceso de scraping si se desea. El endpoint asociado a dicho botón es ```"/run/{job_id}/cancel"```, con función ```cancel_run()```. Es relativamente simple ya que lo único que hace es alterar el estado de la tarea almacenado en ```tasks[job_id]```, que, como hemos visto, actúa como una suerte de recurso compartido, por lo que el proceso asíncrono de scraping que se encuentra a la escucha de algún cambio en el estado será informado correctamente y el hilo se cancelará. Gracias a la lógica del javascript también se producen los cambios en el frontend oportunos.
@@ -969,7 +1002,9 @@ A lo largo de la implementación, se han mencionado diferentes funciones fictici
 
 Se han obviado otros paquetes que suelen venir por defecto con cualquier instalación básica de python. En cualquier caso, el entorno virtual de python mencionado anteriormente cuenta con un listado explícito.
 
-## Notas finales
+## Notas finales (IMPORTANTE)
 El proceso de scraping es, francamente, uno un tanto inseguro. Existen muchas variables fuera de nuestro control y, a lo largo de las extensivas pruebas que se han realizado, se han encontrado inconsistencias, errores debidos a timeouts... En particular, es importante notar que es posible que, al lanzar una tarea de scraping, salte un error debido precisamente a timeouts, pese a que los tiempos establecidos en el código son más que generosos. Es posible, por ejemplo, que salte un error de fichero/directorio no encontrado, lo cual en realidad no es más que un timeout. Las buenas noticias son que, en todos los casos que se han intentado, el error solo salta al principio del scraping y solo es necesario volver a lanzarlo para que se ejecute correctamente.
+
+Por otra parte, hay que tener en cuenta que el frontend del proceso puntual tiene ciertas particularidades. Puesto que solo hay un proceso al mismo tiempo siempre, cuando intentamos acceder a la aplicación cuando ya hay uno ejecutándose, el frontend nos redirigirá automáticamente al proceso actual.
 
 Por otra parte, cualquier proceso de scraping es extremadamente frágil a cualquier cambio que T-Systems haga al frontend de su aplicación. Este proyecto ha requerido una investigación importante del código expuesto por dicha aplicación, por lo que el mantenimiento es prioritario y muy delicado, hay que estar a la escucha de los cambios en el frontend del sitio web al que estamos haciendo scraping.
